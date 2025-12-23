@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoseMorph AI - 1₹ Payment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen">
+
+<div class="bg-gray-800 p-10 rounded-xl text-center w-96">
+    <h1 class="text-2xl font-bold mb-4">Subscribe for 1₹</h1>
+    <p class="mb-6">Pay 1₹ to activate your PRO access for testing.</p>
+
+    <button id="pay-btn" class="bg-indigo-500 px-6 py-3 rounded-lg font-bold hover:bg-indigo-600">
+        Pay 1₹ via Razorpay
+    </button>
+
+    <p id="status" class="mt-4 text-sm text-gray-300"></p>
+</div>
+
+<script>
+const payBtn = document.getElementById('pay-btn');
+const status = document.getElementById('status');
+
+payBtn.addEventListener('click', async () => {
+    try {
+        payBtn.disabled = true;
+        status.textContent = "Initializing payment...";
+
+        // 1️⃣ Create Order on Backend
+        const res = await fetch("http://localhost:5000/create-order", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ plan: "1day" })
+        });
+        const orderData = await res.json();
+
+        if(orderData.error){
+            status.textContent = "Error creating order: " + orderData.error;
+            payBtn.disabled = false;
+            return;
+        }
+
+        // 2️⃣ Open Razorpay Checkout
+        const options = {
+            key: "rzp_live_RuyDAvoJPFZ3bq",  // Public Key
+            amount: orderData.amount,
+            currency: orderData.currency,
+            name: "PoseMorph AI",
+            description: "1₹ Test Subscription",
+            order_id: orderData.id,
+            prefill: { contact: "", email: "" },
+            theme: { color: "#6366f1" },
+            handler: async function(response){
+                status.textContent = "Verifying payment...";
+                // 3️⃣ Verify Payment on Backend
+                const verifyRes = await fetch("http://localhost:5000/verify-payment", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({...response, plan:"1day"})
+                });
+                const verifyData = await verifyRes.json();
+                if(verifyData.status === "success"){
+                    status.textContent = "Payment Successful! Subscription Active.";
+                } else {
+                    status.textContent = "Verification Failed: " + verifyData.message;
+                }
+            },
+            modal: {
+                ondismiss: function(){
+                    payBtn.disabled = false;
+                    status.textContent = "Payment cancelled.";
+                }
+            }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.open();
+
+    } catch(err){
+        console.error(err);
+        status.textContent = "Payment error: " + err;
+        payBtn.disabled = false;
+    }
+});
+</script>
+
+<!-- Razorpay Checkout SDK -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</body>
+</html>
